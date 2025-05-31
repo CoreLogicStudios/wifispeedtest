@@ -316,7 +316,7 @@
         <div class="server-info">
             <div class="server-title">Test Server Information</div>
             <div class="server-details">
-                <div><strong>Server:</strong> <span id="serverName">Render Cloud</span></div>
+                <div><strong>Server:</strong> <span id="serverName">Railway Cloud</span></div>
                 <div><strong>Location:</strong> <span id="serverLocation">Detecting...</span></div>
                 <div><strong>Your IP:</strong> <span id="userIP">Detecting...</span></div>
                 <div><strong>ISP:</strong> <span id="userISP">Detecting...</span></div>
@@ -328,7 +328,7 @@
         class SpeedTest {
             constructor() {
                 this.isRunning = false;
-                this.baseUrl = window.location.origin; // Your Render URL
+                this.baseUrl = window.location.origin;
                 this.results = {
                     download: 0,
                     upload: 0,
@@ -339,22 +339,29 @@
             }
 
             async init() {
+                console.log('Initializing speed test...');
                 await this.detectUserInfo();
                 await this.checkServerHealth();
             }
 
             async checkServerHealth() {
                 try {
+                    console.log('Checking server health...');
                     const response = await fetch(`${this.baseUrl}/health`);
                     const data = await response.json();
                     console.log('Server health:', data);
+                    
+                    if (data.status === 'healthy') {
+                        console.log('✅ Server is healthy and ready');
+                    }
                 } catch (error) {
-                    console.log('Server health check failed:', error);
+                    console.warn('⚠️ Server health check failed:', error);
                 }
             }
 
             async detectUserInfo() {
                 try {
+                    console.log('Detecting user info...');
                     const response = await fetch('https://ipapi.co/json/');
                     const data = await response.json();
                     
@@ -362,6 +369,8 @@
                     document.getElementById('userISP').textContent = data.org || 'Unknown';
                     document.getElementById('serverLocation').textContent = 
                         `${data.city}, ${data.region}` || 'Unknown';
+                        
+                    console.log('User info detected:', data);
                 } catch (error) {
                     console.log('Could not fetch IP info:', error);
                     document.getElementById('userIP').textContent = 'Unknown';
@@ -372,7 +381,7 @@
 
             updateGauge(speed) {
                 const needle = document.getElementById('gaugeNeedle');
-                const maxSpeed = 500; // Max speed for gauge (500 Mbps)
+                const maxSpeed = 1000; // Max speed for gauge
                 const angle = Math.min((speed / maxSpeed) * 180, 180) - 90;
                 needle.style.transform = `translateX(-50%) rotate(${angle}deg)`;
             }
@@ -383,6 +392,7 @@
 
             updateStatus(message) {
                 document.getElementById('testStatus').textContent = message;
+                console.log('Status:', message);
             }
 
             updateSpeedDisplay(speed) {
@@ -390,6 +400,7 @@
             }
 
             async measureLatency() {
+                console.log('Starting latency measurement...');
                 const measurements = [];
                 
                 for (let i = 0; i < 5; i++) {
@@ -402,7 +413,9 @@
                         const end = performance.now();
                         
                         if (response.ok) {
-                            measurements.push(end - start);
+                            const latency = end - start;
+                            measurements.push(latency);
+                            console.log(`Ping ${i + 1}: ${latency.toFixed(1)}ms`);
                         }
                     } catch (error) {
                         console.log('Ping test error:', error);
@@ -416,16 +429,19 @@
                 const jitter = measurements.length > 1 ? 
                     Math.max(...measurements) - Math.min(...measurements) : 0;
                 
+                console.log(`Average ping: ${avgPing.toFixed(1)}ms, Jitter: ${jitter.toFixed(1)}ms`);
                 return { ping: avgPing, jitter: jitter };
             }
 
             async measureDownloadSpeed() {
-                const fileSizes = [1, 5, 10, 20]; // MB - Render can handle larger files
+                console.log('Starting download speed test...');
+                const fileSizes = [1, 5, 10, 25]; // MB - Railway can handle larger files
                 let totalSpeed = 0;
                 let tests = 0;
 
                 for (const size of fileSizes) {
                     try {
+                        console.log(`Testing download: ${size}MB...`);
                         const url = `${this.baseUrl}/api/download?size=${size}MB`;
                         const start = performance.now();
                         
@@ -443,29 +459,35 @@
                         const duration = (end - start) / 1000;
                         const speedMbps = (blob.size * 8) / (duration * 1000000);
                         
+                        console.log(`${size}MB download: ${speedMbps.toFixed(1)} Mbps (${duration.toFixed(1)}s)`);
+                        
                         totalSpeed += speedMbps;
                         tests++;
                         
                         this.updateSpeedDisplay(speedMbps);
                         this.updateGauge(speedMbps);
                         
-                        await new Promise(resolve => setTimeout(resolve, 300));
+                        await new Promise(resolve => setTimeout(resolve, 500));
                         
                     } catch (error) {
                         console.log(`Download test failed for ${size}MB:`, error);
                     }
                 }
 
-                return tests > 0 ? totalSpeed / tests : 0;
+                const avgSpeed = tests > 0 ? totalSpeed / tests : 0;
+                console.log(`Average download speed: ${avgSpeed.toFixed(1)} Mbps`);
+                return avgSpeed;
             }
 
             async measureUploadSpeed() {
+                console.log('Starting upload speed test...');
                 const testSizes = [1, 5, 10]; // MB
                 let totalSpeed = 0;
                 let tests = 0;
 
                 for (const size of testSizes) {
                     try {
+                        console.log(`Testing upload: ${size}MB...`);
                         const testData = new ArrayBuffer(size * 1024 * 1024);
                         const url = `${this.baseUrl}/api/upload`;
                         
@@ -489,13 +511,15 @@
                         const duration = (end - start) / 1000;
                         const speedMbps = (testData.byteLength * 8) / (duration * 1000000);
                         
+                        console.log(`${size}MB upload: ${speedMbps.toFixed(1)} Mbps (${duration.toFixed(1)}s)`);
+                        
                         totalSpeed += speedMbps;
                         tests++;
                         
                         this.updateSpeedDisplay(speedMbps);
                         this.updateGauge(speedMbps);
                         
-                        await new Promise(resolve => setTimeout(resolve, 300));
+                        await new Promise(resolve => setTimeout(resolve, 500));
                         
                     } catch (error) {
                         console.log(`Upload test failed for ${size}MB:`, error);
@@ -503,15 +527,20 @@
                 }
 
                 if (tests === 0 && this.results.download > 0) {
-                    return this.results.download * 0.8;
+                    const estimatedSpeed = this.results.download * 0.8;
+                    console.log(`Using estimated upload speed: ${estimatedSpeed.toFixed(1)} Mbps`);
+                    return estimatedSpeed;
                 }
 
-                return tests > 0 ? totalSpeed / tests : 0;
+                const avgSpeed = tests > 0 ? totalSpeed / tests : 0;
+                console.log(`Average upload speed: ${avgSpeed.toFixed(1)} Mbps`);
+                return avgSpeed;
             }
 
             async runTest() {
                 if (this.isRunning) return;
                 
+                console.log('🚀 Starting speed test...');
                 this.isRunning = true;
                 const button = document.getElementById('testButton');
                 button.disabled = true;
@@ -544,9 +573,10 @@
 
                     this.displayResults();
                     this.updateStatus('Test completed successfully!');
+                    console.log('✅ Speed test completed!', this.results);
 
                 } catch (error) {
-                    console.error('Speed test error:', error);
+                    console.error('❌ Speed test error:', error);
                     this.updateStatus('Test failed. Please check your connection and try again.');
                 } finally {
                     this.isRunning = false;
@@ -569,11 +599,15 @@
             }
         }
 
+        // Initialize speed test when page loads
         const speedTest = new SpeedTest();
 
         function startSpeedTest() {
             speedTest.runTest();
         }
+
+        // Log when page is ready
+        console.log('🌐 SpeedCheck Pro initialized');
     </script>
 </body>
 </html>
