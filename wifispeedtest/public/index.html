@@ -481,89 +481,28 @@
 
             async measureUploadSpeed() {
                 console.log('Starting upload speed test...');
-                const testSizes = [1, 2, 3]; // Smaller, more manageable sizes
+                const testSizes = [0.1, 0.25, 0.5]; // Much smaller sizes: 100KB, 250KB, 500KB
                 let totalSpeed = 0;
                 let tests = 0;
 
                 for (let i = 0; i < testSizes.length; i++) {
-                    const size = testSizes[i];
+                    const sizeMB = testSizes[i];
                     try {
-                        // Update status with progress
                         this.updateStatus(`Testing upload speed... (${i + 1}/${testSizes.length})`);
-                        console.log(`Testing upload: ${size}MB...`);
+                        console.log(`Testing upload: ${sizeMB}MB...`);
                         
-                        // Use progressive chunked upload to avoid freezing
-                        const result = await this.performChunkedUpload(size);
-                        
-                        if (result.success) {
-                            totalSpeed += result.speed;
-                            tests++;
-                            
-                            this.updateSpeedDisplay(result.speed);
-                            this.updateGauge(result.speed);
-                            
-                            console.log(`${size}MB upload: ${result.speed.toFixed(1)} Mbps`);
-                        }
-                        
-                        // Allow UI to update between tests
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        
-                    } catch (error) {
-                        console.log(`Upload test failed for ${size}MB:`, error);
-                    }
-                }
-
-                if (tests === 0 && this.results.download > 0) {
-                    const estimatedSpeed = this.results.download * 0.8;
-                    console.log(`Using estimated upload speed: ${estimatedSpeed.toFixed(1)} Mbps`);
-                    return estimatedSpeed;
-                }
-
-                const avgSpeed = tests > 0 ? totalSpeed / tests : 0;
-                console.log(`Average upload speed: ${avgSpeed.toFixed(1)} Mbps`);
-                return avgSpeed;
-            }
-
-            // Progressive chunked upload to prevent UI freezing
-            async performChunkedUpload(sizeMB) {
-                return new Promise(async (resolve) => {
-                    try {
-                        const totalBytes = sizeMB * 1024 * 1024;
-                        const chunkSize = 64 * 1024; // 64KB chunks
-                        const totalChunks = Math.ceil(totalBytes / chunkSize);
-                        
-                        console.log(`Uploading ${sizeMB}MB in ${totalChunks} chunks...`);
+                        // Create very small test data to avoid memory issues
+                        const bytes = Math.floor(sizeMB * 1024 * 1024);
+                        const testData = 'A'.repeat(bytes); // Simple string, much more efficient
                         
                         const start = performance.now();
                         
-                        // Create a simple test payload
-                        const testPattern = 'A'.repeat(Math.min(chunkSize, totalBytes));
-                        const chunks = [];
-                        
-                        // Build chunks progressively without blocking
-                        for (let i = 0; i < totalChunks; i++) {
-                            const currentSize = Math.min(chunkSize, totalBytes - (i * chunkSize));
-                            if (currentSize === chunkSize) {
-                                chunks.push(testPattern);
-                            } else {
-                                chunks.push('A'.repeat(currentSize));
-                            }
-                            
-                            // Yield control every 10 chunks to prevent freezing
-                            if (i % 10 === 0) {
-                                await new Promise(resolve => setTimeout(resolve, 0));
-                            }
-                        }
-                        
-                        // Combine and upload
-                        const uploadData = chunks.join('');
-                        
                         const response = await fetch(`${this.baseUrl}/api/upload`, {
                             method: 'POST',
-                            body: uploadData,
+                            body: testData,
                             headers: {
-                                'Content-Type': 'application/octet-stream',
-                                'Content-Length': uploadData.length.toString()
+                                'Content-Type': 'text/plain',
+                                'Content-Length': testData.length.toString()
                             }
                         });
                         
@@ -575,21 +514,44 @@
                         const end = performance.now();
                         
                         const duration = (end - start) / 1000;
-                        const speedMbps = (uploadData.length * 8) / (duration * 1000000);
+                        const speedMbps = (testData.length * 8) / (duration * 1000000);
                         
-                        resolve({
-                            success: true,
-                            speed: speedMbps,
-                            duration: duration,
-                            bytes: uploadData.length
-                        });
+                        console.log(`${sizeMB}MB upload: ${speedMbps.toFixed(1)} Mbps`);
+                        
+                        totalSpeed += speedMbps;
+                        tests++;
+                        
+                        this.updateSpeedDisplay(speedMbps);
+                        this.updateGauge(speedMbps);
+                        
+                        // Very short delay
+                        await new Promise(resolve => setTimeout(resolve, 50));
                         
                     } catch (error) {
-                        console.error('Chunked upload failed:', error);
-                        resolve({ success: false, error: error.message });
+                        console.log(`Upload test failed for ${sizeMB}MB:`, error);
                     }
-                });
+                }
+
+                // If all tests failed, estimate based on download
+                if (tests === 0) {
+                    console.log('All upload tests failed, estimating...');
+                    if (this.results.download > 0) {
+                        const estimatedSpeed = this.results.download * 0.7; // Conservative estimate
+                        console.log(`Using estimated upload speed: ${estimatedSpeed.toFixed(1)} Mbps`);
+                        this.updateSpeedDisplay(estimatedSpeed);
+                        this.updateGauge(estimatedSpeed);
+                        return estimatedSpeed;
+                    }
+                    return 0;
+                }
+
+                const avgSpeed = totalSpeed / tests;
+                console.log(`Average upload speed: ${avgSpeed.toFixed(1)} Mbps`);
+                return avgSpeed;
             }
+
+            // Remove the chunked upload method since we're not using it
+            // performChunkedUpload method deleted
 
             async runTest() {
                 if (this.isRunning) return;
