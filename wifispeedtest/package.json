@@ -1,7 +1,7 @@
 {
-  "name": "speedtest-backend",
+  "name": "speedtest-railway",
   "version": "1.0.0",
-  "description": "Speed test backend for Render",
+  "description": "Speed test app for Railway",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,6 +12,6 @@
     "cors": "^2.8.5"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": "18.x"
   }
 }
