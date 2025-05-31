@@ -481,45 +481,32 @@
 
             async measureUploadSpeed() {
                 console.log('Starting upload speed test...');
-                const testSizes = [1, 5, 10]; // MB
+                const testSizes = [1, 2, 3]; // Smaller, more manageable sizes
                 let totalSpeed = 0;
                 let tests = 0;
 
-                for (const size of testSizes) {
+                for (let i = 0; i < testSizes.length; i++) {
+                    const size = testSizes[i];
                     try {
+                        // Update status with progress
+                        this.updateStatus(`Testing upload speed... (${i + 1}/${testSizes.length})`);
                         console.log(`Testing upload: ${size}MB...`);
-                        const testData = new ArrayBuffer(size * 1024 * 1024);
-                        const url = `${this.baseUrl}/api/upload`;
                         
-                        const start = performance.now();
+                        // Use progressive chunked upload to avoid freezing
+                        const result = await this.performChunkedUpload(size);
                         
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            body: testData,
-                            headers: {
-                                'Content-Type': 'application/octet-stream'
-                            }
-                        });
-                        
-                        if (!response.ok) {
-                            throw new Error(`HTTP ${response.status}`);
+                        if (result.success) {
+                            totalSpeed += result.speed;
+                            tests++;
+                            
+                            this.updateSpeedDisplay(result.speed);
+                            this.updateGauge(result.speed);
+                            
+                            console.log(`${size}MB upload: ${result.speed.toFixed(1)} Mbps`);
                         }
                         
-                        const result = await response.json();
-                        const end = performance.now();
-                        
-                        const duration = (end - start) / 1000;
-                        const speedMbps = (testData.byteLength * 8) / (duration * 1000000);
-                        
-                        console.log(`${size}MB upload: ${speedMbps.toFixed(1)} Mbps (${duration.toFixed(1)}s)`);
-                        
-                        totalSpeed += speedMbps;
-                        tests++;
-                        
-                        this.updateSpeedDisplay(speedMbps);
-                        this.updateGauge(speedMbps);
-                        
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        // Allow UI to update between tests
+                        await new Promise(resolve => setTimeout(resolve, 100));
                         
                     } catch (error) {
                         console.log(`Upload test failed for ${size}MB:`, error);
@@ -535,6 +522,73 @@
                 const avgSpeed = tests > 0 ? totalSpeed / tests : 0;
                 console.log(`Average upload speed: ${avgSpeed.toFixed(1)} Mbps`);
                 return avgSpeed;
+            }
+
+            // Progressive chunked upload to prevent UI freezing
+            async performChunkedUpload(sizeMB) {
+                return new Promise(async (resolve) => {
+                    try {
+                        const totalBytes = sizeMB * 1024 * 1024;
+                        const chunkSize = 64 * 1024; // 64KB chunks
+                        const totalChunks = Math.ceil(totalBytes / chunkSize);
+                        
+                        console.log(`Uploading ${sizeMB}MB in ${totalChunks} chunks...`);
+                        
+                        const start = performance.now();
+                        
+                        // Create a simple test payload
+                        const testPattern = 'A'.repeat(Math.min(chunkSize, totalBytes));
+                        const chunks = [];
+                        
+                        // Build chunks progressively without blocking
+                        for (let i = 0; i < totalChunks; i++) {
+                            const currentSize = Math.min(chunkSize, totalBytes - (i * chunkSize));
+                            if (currentSize === chunkSize) {
+                                chunks.push(testPattern);
+                            } else {
+                                chunks.push('A'.repeat(currentSize));
+                            }
+                            
+                            // Yield control every 10 chunks to prevent freezing
+                            if (i % 10 === 0) {
+                                await new Promise(resolve => setTimeout(resolve, 0));
+                            }
+                        }
+                        
+                        // Combine and upload
+                        const uploadData = chunks.join('');
+                        
+                        const response = await fetch(`${this.baseUrl}/api/upload`, {
+                            method: 'POST',
+                            body: uploadData,
+                            headers: {
+                                'Content-Type': 'application/octet-stream',
+                                'Content-Length': uploadData.length.toString()
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}`);
+                        }
+                        
+                        const result = await response.json();
+                        const end = performance.now();
+                        
+                        const duration = (end - start) / 1000;
+                        const speedMbps = (uploadData.length * 8) / (duration * 1000000);
+                        
+                        resolve({
+                            success: true,
+                            speed: speedMbps,
+                            duration: duration,
+                            bytes: uploadData.length
+                        });
+                        
+                    } catch (error) {
+                        console.error('Chunked upload failed:', error);
+                        resolve({ success: false, error: error.message });
+                    }
+                });
             }
 
             async runTest() {
@@ -568,6 +622,9 @@
 
                     // Test upload speed
                     this.updateStatus('Testing upload speed...');
+                    this.updateProgress(70);
+                    
+                    // Add more detailed status updates for upload
                     this.results.upload = await this.measureUploadSpeed();
                     this.updateProgress(100);
 
