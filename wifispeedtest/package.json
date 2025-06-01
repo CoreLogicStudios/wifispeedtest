@@ -1,7 +1,7 @@
 {
-  "name": "railway-speedtest-server",
-  "version": "1.0.0",
-  "description": "High-performance network speed test server for Railway",
+  "name": "enhanced-speedtest-server",
+  "version": "2.0.0",
+  "description": "High-accuracy adaptive network speed test server with multi-stream support",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -14,7 +14,10 @@
     "bandwidth", 
     "railway", 
     "performance",
-    "speed-test"
+    "speed-test",
+    "adaptive",
+    "multi-stream",
+    "accuracy"
   ],
   "author": "Your Name",
   "license": "MIT",
