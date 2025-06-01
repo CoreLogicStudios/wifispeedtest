@@ -626,4 +626,103 @@
 
                 try {
                     // Phase 1: Ping Test
-                    const
+                    const pingResults = await this.measurePing(serverUrl);
+                    this.results.ping = pingResults.ping;
+                    this.results.jitter = pingResults.jitter;
+                    this.results.loss = pingResults.loss;
+
+                    document.getElementById('pingValue').textContent = `${pingResults.ping.toFixed(0)}ms`;
+                    document.getElementById('jitterValue').textContent = `${pingResults.jitter.toFixed(1)}ms`;
+                    document.getElementById('lossValue').textContent = `${pingResults.loss.toFixed(1)}%`;
+
+                    // Phase 2: Download Test
+                    this.results.download = await this.measureDownload(serverUrl, duration);
+
+                    // Phase 3: Upload Test
+                    this.results.upload = await this.measureUpload(serverUrl, duration);
+
+                    // Show results
+                    this.showResults();
+
+                } catch (error) {
+                    console.error('Test failed:', error);
+                    document.getElementById('status').innerHTML = `<div class="error">Test failed: ${error.message}</div>`;
+                } finally {
+                    this.isRunning = false;
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'START TEST';
+                    this.updateUI('Test Complete', Math.max(this.results.download, this.results.upload), 100);
+                }
+            }
+
+            showResults() {
+                const results = document.getElementById('results');
+                document.getElementById('downloadResult').textContent = `${this.results.download.toFixed(2)} Mbps`;
+                document.getElementById('uploadResult').textContent = `${this.results.upload.toFixed(2)} Mbps`;
+                document.getElementById('durationResult').textContent = `${document.getElementById('testDuration').value} seconds`;
+                document.getElementById('serverResult').textContent = new URL(this.getSelectedServer()).hostname;
+                
+                results.classList.add('show');
+
+                // Update main display with the maximum speed achieved
+                const maxSpeed = Math.max(this.results.download, this.results.upload);
+                this.updateUI('Test Complete', maxSpeed, 100);
+                
+                // Update status
+                document.getElementById('status').textContent = 'Test completed successfully!';
+            }
+
+            handleURLParams() {
+                const params = new URLSearchParams(window.location.search);
+                
+                // Auto-run test
+                if (params.has('run') || params.has('r')) {
+                    const delay = parseInt(params.get('run') || params.get('r') || '0');
+                    setTimeout(() => this.runTest(), delay * 1000);
+                }
+                
+                // Set duration
+                if (params.has('duration') || params.has('d')) {
+                    const duration = params.get('duration') || params.get('d');
+                    const durationSelect = document.getElementById('testDuration');
+                    if ([10, 15, 30].includes(parseInt(duration))) {
+                        durationSelect.value = duration;
+                    }
+                }
+                
+                // Set custom server
+                if (params.has('server') || params.has('s')) {
+                    const server = params.get('server') || params.get('s');
+                    const serverSelect = document.getElementById('testServer');
+                    if (server.startsWith('http')) {
+                        serverSelect.value = 'custom';
+                        document.getElementById('customServer').value = server;
+                        document.getElementById('customServerDiv').style.display = 'block';
+                    }
+                }
+                
+                // Set connection count
+                if (params.has('connections') || params.has('c')) {
+                    const connections = params.get('connections') || params.get('c');
+                    const connectionSelect = document.getElementById('connectionCount');
+                    if ([4, 6, 8].includes(parseInt(connections))) {
+                        connectionSelect.value = connections;
+                    }
+                }
+            }
+        }
+
+        // Initialize the speed test
+        const speedTest = new RailwaySpeedTest();
+
+        function startTest() {
+            speedTest.runTest();
+        }
+
+        // Handle page load
+        window.addEventListener('load', () => {
+            console.log('Railway Speed Test loaded');
+        });
+    </script>
+</body>
+</html>
